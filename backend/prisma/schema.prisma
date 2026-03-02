@@ -1,0 +1,84 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ─── TRANSACTIONS ───────────────────────────────────────────
+model Transaction {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  type        String   // "income" | "expense"
+  category    String
+  description String
+  amount      Float
+  reference   String?  // e.g. "payroll:uuid" or "invoice:uuid"
+  deleted     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── PAYROLL ────────────────────────────────────────────────
+model PayrollEntry {
+  id            String   @id @default(uuid())
+  employeeName  String
+  role          String
+  salary        Float
+  bonus         Float    @default(0)
+  deductions    Float    @default(0)
+  netPay        Float
+  payPeriod     String   // e.g. "2026-03"
+  status        String   @default("pending")  // "pending" | "paid"
+  paidAt        DateTime?
+  transactionId String?  // links to generated expense transaction
+  deleted       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── QUOTES ─────────────────────────────────────────────────
+model Quote {
+  id           String   @id @default(uuid())
+  clientName   String
+  description  String
+  items        String   // JSON string: [{name, qty, unitPrice}]
+  totalAmount  Float
+  status       String   @default("draft") // "draft" | "sent" | "accepted" | "rejected" | "converted"
+  validUntil   DateTime
+  invoiceId    String?  // set when converted to invoice
+  deleted      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── INVOICES ───────────────────────────────────────────────
+model Invoice {
+  id            String   @id @default(uuid())
+  clientName    String
+  description   String
+  items         String   // JSON string: [{name, qty, unitPrice}]
+  totalAmount   Float
+  status        String   @default("unpaid") // "unpaid" | "paid" | "overdue"
+  dueDate       DateTime
+  paidAt        DateTime?
+  quoteId       String?  // if created from a quote
+  transactionId String?  // links to generated income transaction
+  deleted       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── PROFIT SNAPSHOTS ───────────────────────────────────────
+model ProfitSnapshot {
+  id           String   @id @default(uuid())
+  period       String   // e.g. "2026-03" or "2026-Q1"
+  totalIncome  Float
+  totalExpense Float
+  netProfit    Float
+  metadata     String?  // JSON for extra detail
+  createdAt    DateTime @default(now())
+}

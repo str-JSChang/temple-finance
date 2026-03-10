@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Env
+.env
+*.local
+
+# Database
+prisma/dev.db
+prisma/dev.db-journal
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Prisma Client
+.prisma/

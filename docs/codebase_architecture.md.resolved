@@ -1,0 +1,361 @@
+# 🏛️ Temple Financial Management System — Architecture Overview
+
+> Designed for rapid SWE onboarding. Covers stack, modules, data models, API surface, and key business logic flows.
+
+---
+
+## 1. High-Level System Architecture
+
+```mermaid
+graph TB
+    subgraph Browser["🌐 Browser (Port 5173)"]
+        FE["React + Vite + Tailwind v4\nfrontend/"]
+    end
+
+    subgraph API["🖥️ Node.js Express Server (Port 3001)"]
+        IDX["index.js\nEntry Point + CORS + Router"]
+        subgraph Modules["modules/"]
+            TXN["transaction/routes.js"]
+            PAY["payroll/routes.js"]
+            QUO["quotes/routes.js"]
+            INV["invoices/routes.js"]
+            RPT["reports/routes.js"]
+        end
+        LIB["lib/prisma.js\nSingleton Client"]
+    end
+
+    subgraph DB["🗄️ Data Layer"]
+        PRI["Prisma ORM\nprisma/schema.prisma"]
+        SQLite["SQLite\ndev.db"]
+    end
+
+    FE -->|"axios HTTP calls\n/api/*"| IDX
+    IDX --> TXN
+    IDX --> PAY
+    IDX --> QUO
+    IDX --> INV
+    IDX --> RPT
+    TXN --> LIB
+    PAY --> LIB
+    QUO --> LIB
+    INV --> LIB
+    RPT --> LIB
+    LIB --> PRI
+    PRI --> SQLite
+```
+
+---
+
+## 2. Frontend Structure
+
+```mermaid
+graph TD
+    main["main.jsx\nReact DOM root"]
+    App["App.jsx\nBrowserRouter + Routes"]
+    Layout["components/Layout.jsx\nHeader + Sidebar shell"]
+    Sidebar["components/Sidebar.jsx\nNav links"]
+
+    main --> App
+    App --> Layout
+    Layout --> Sidebar
+
+    subgraph Pages["src/pages/"]
+        DB_pg["/dashboard → Dashboard.jsx"]
+        TX_pg["/transactions → Transactions.jsx"]
+        PY_pg["/payroll → Payroll.jsx"]
+        QI_pg["/quotes-invoices → QuotesInvoices.jsx"]
+        RP_pg["/reports → Reports.jsx"]
+    end
+
+    Layout --> DB_pg
+    Layout --> TX_pg
+    Layout --> PY_pg
+    Layout --> QI_pg
+    Layout --> RP_pg
+
+    subgraph Services["src/services/"]
+        API_SVC["api.js\naxios base URL config"]
+    end
+
+    DB_pg --> API_SVC
+    TX_pg --> API_SVC
+    PY_pg --> API_SVC
+    QI_pg --> API_SVC
+    RP_pg --> API_SVC
+```
+
+### Frontend Tech Stack
+
+| Layer | Library | Version |
+|---|---|---|
+| Framework | React | 19 |
+| Build Tool | Vite | 7 |
+| Routing | react-router-dom | 7 |
+| Styling | Tailwind CSS | v4 |
+| HTTP Client | axios | latest |
+| Charts | Recharts | 3 |
+| Icons | lucide-react | latest |
+
+---
+
+## 3. Backend Module Map & REST API Endpoints
+
+```mermaid
+graph LR
+    subgraph "Express Router — /api"
+        subgraph TX["📋 /transactions"]
+            TX1["GET / — list (filter: type, category, date)"]
+            TX2["GET /:id — single"]
+            TX3["POST / — create"]
+            TX4["PUT /:id — update"]
+            TX5["DELETE /:id — soft delete"]
+            TX6["GET /stats/summary — totals"]
+        end
+
+        subgraph PY["💰 /payroll"]
+            PY1["GET / — list (filter: status, payPeriod)"]
+            PY2["GET /:id — single"]
+            PY3["POST / — create entry"]
+            PY4["PUT /:id — update entry"]
+            PY5["POST /:id/pay — 🔀 pay & auto-create Tx"]
+            PY6["DELETE /:id — soft delete"]
+        end
+
+        subgraph QU["📄 /quotes"]
+            QU1["GET / — list (filter: status)"]
+            QU2["GET /:id — single"]
+            QU3["POST / — create"]
+            QU4["PUT /:id — update / change status"]
+            QU5["POST /:id/convert — 🔀 convert to Invoice"]
+            QU6["DELETE /:id — soft delete"]
+        end
+
+        subgraph IN["🧾 /invoices"]
+            IN1["GET / — list (filter: status)"]
+            IN2["GET /:id — single"]
+            IN3["POST / — create standalone"]
+            IN4["PUT /:id — update"]
+            IN5["POST /:id/pay — 🔀 pay & auto-create Tx"]
+            IN6["DELETE /:id — soft delete"]
+        end
+
+        subgraph RP["📊 /reports"]
+            RP1["GET /dashboard — KPI summary + monthly chart data"]
+            RP2["GET /snapshots — list profit snapshots"]
+            RP3["POST /snapshots — create period snapshot"]
+            RP4["GET /income-expense — filtered P&L report"]
+        end
+    end
+```
+
+> 🔀 = **automated cross-module side-effect** (see Business Logic section below)
+
+---
+
+## 4. Database Schema & Entity Relationships
+
+```mermaid
+erDiagram
+    Transaction {
+        String id PK
+        DateTime date
+        String type "income | expense"
+        String category
+        String description
+        Float amount
+        String reference "payroll:uuid | invoice:uuid"
+        Boolean deleted
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    PayrollEntry {
+        String id PK
+        String employeeName
+        String role
+        Float salary
+        Float bonus
+        Float deductions
+        Float netPay
+        String payPeriod "YYYY-MM"
+        String status "pending | paid"
+        DateTime paidAt
+        String transactionId FK
+        Boolean deleted
+    }
+
+    Quote {
+        String id PK
+        String clientName
+        String description
+        String items "JSON [{name,qty,unitPrice}]"
+        Float totalAmount
+        String status "draft|sent|accepted|rejected|converted"
+        DateTime validUntil
+        String invoiceId FK
+        Boolean deleted
+    }
+
+    Invoice {
+        String id PK
+        String clientName
+        String description
+        String items "JSON [{name,qty,unitPrice}]"
+        Float totalAmount
+        String status "unpaid | paid | overdue"
+        DateTime dueDate
+        DateTime paidAt
+        String quoteId FK
+        String transactionId FK
+        Boolean deleted
+    }
+
+    ProfitSnapshot {
+        String id PK
+        String period "YYYY-MM or YYYY-Q1"
+        Float totalIncome
+        Float totalExpense
+        Float netProfit
+        String metadata "JSON"
+        DateTime createdAt
+    }
+
+    PayrollEntry ||--o| Transaction : "generates (on pay)"
+    Invoice ||--o| Transaction : "generates (on pay)"
+    Quote ||--o| Invoice : "converts to"
+```
+
+> ⚠️ **`items` field is a JSON string** in both `Quote` and `Invoice`. Routes parse/stringify on every read/write. No Prisma relation is used — it's a serialized array.
+
+---
+
+## 5. Automated Business Logic Flows
+
+These are the critical cross-module side-effects that keep all data consistent.
+
+### 5a. Payroll Payment Flow
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (Payroll.jsx)
+    participant API as POST /api/payroll/:id/pay
+    participant DB as SQLite via Prisma
+
+    FE->>API: POST /api/payroll/{id}/pay
+    API->>DB: Find PayrollEntry (must be "pending")
+    API->>DB: CREATE Transaction {type:"expense", category:"Payroll", amount: netPay, reference: "payroll:{id}"}
+    API->>DB: UPDATE PayrollEntry {status:"paid", paidAt: now, transactionId: tx.id}
+    API-->>FE: { payroll, transaction }
+    Note over DB: netPay = salary + bonus - deductions
+```
+
+### 5b. Invoice Payment Flow
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (QuotesInvoices.jsx)
+    participant API as POST /api/invoices/:id/pay
+    participant DB as SQLite via Prisma
+
+    FE->>API: POST /api/invoices/{id}/pay
+    API->>DB: Find Invoice (must NOT be "paid")
+    API->>DB: CREATE Transaction {type:"income", category:"Invoice Payment", amount: totalAmount, reference: "invoice:{id}"}
+    API->>DB: UPDATE Invoice {status:"paid", paidAt: now, transactionId: tx.id}
+    API-->>FE: { invoice, transaction }
+```
+
+### 5c. Quote → Invoice Conversion Flow
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (QuotesInvoices.jsx)
+    participant API as POST /api/quotes/:id/convert
+    participant DB as SQLite via Prisma
+
+    FE->>API: POST /api/quotes/{id}/convert { dueDate? }
+    API->>DB: Find Quote (must NOT be "converted")
+    API->>DB: CREATE Invoice {clientName, description, items, totalAmount, dueDate, quoteId: quote.id}
+    API->>DB: UPDATE Quote {status:"converted", invoiceId: invoice.id}
+    API-->>FE: { quote, invoice }
+    Note over DB: dueDate defaults to +30 days if not provided
+```
+
+---
+
+## 6. Data Flow: Dashboard Aggregation
+
+```mermaid
+graph LR
+    DB1[("Transaction\ntable")] -->|"all non-deleted rows"| RPT
+    DB2[("PayrollEntry\ntable")] -->|"count / pending count"| RPT
+    DB3[("Quote table")] -->|"count"| RPT
+    DB4[("Invoice table")] -->|"count / unpaid count"| RPT
+
+    RPT["GET /api/reports/dashboard"]
+
+    RPT --> SUM["summary KPIs\ntotalIncome, totalExpense,\nnetProfit, counts"]
+    RPT --> MBD["monthlyBreakdown[]\n{month, income, expense, profit}"]
+    RPT --> CBD["categoryBreakdown[]\n{category, income, expense}"]
+    RPT --> RTX["recentTransactions[5]"]
+
+    SUM --> DASH["Dashboard.jsx\n(Recharts bar + pie charts)"]
+    MBD --> DASH
+    CBD --> DASH
+    RTX --> DASH
+```
+
+---
+
+## 7. Key Design Decisions & Gotchas
+
+| # | Decision | Implication |
+|---|---|---|
+| 1 | **Soft deletes everywhere** | All tables have `deleted: Boolean`. All queries must include `where: { deleted: false }`. Never use hard DELETE on financial records. |
+| 2 | **Transaction as ledger** | Every financial action (payroll payment, invoice payment) creates a `Transaction` row. The `reference` field links back using `"payroll:{uuid}"` or `"invoice:{uuid}"` string format. |
+| 3 | **Items stored as JSON string** | `Quote.items` and `Invoice.items` are `String` in Prisma (SQLite limitation). Routes always `JSON.parse()` on read and `JSON.stringify()` on write. |
+| 4 | **No auth layer** | This is a demo system. There is no authentication or authorization middleware. |
+| 5 | **ProfitSnapshot is manual** | Snapshots are explicitly POSTed by a user action — they are NOT auto-generated. They capture a point-in-time view of a period. |
+| 6 | **Payroll ≠ Employee model** | There is no persistent `Employee` model. Each `PayrollEntry` embeds `employeeName` and `role` directly as strings. |
+| 7 | **No input validation library** | Routes do manual `parseFloat()` and string checks. No Zod/Joi schema validation. |
+| 8 | **Vite proxy not configured** | Frontend calls `http://localhost:3001` directly via axios base URL. Both servers must run simultaneously during development. |
+
+---
+
+## 8. Running Locally
+
+```mermaid
+graph LR
+    A["1. cd backend\nnpm install"] --> B["2. npx prisma db push\n(create SQLite schema)"]
+    B --> C["3. node prisma/seed.js\n(load sample data)"]
+    C --> D["4. node index.js\nAPI on :3001"]
+    E["5. cd frontend\nnpm install"] --> F["6. npm run dev\nUI on :5173"]
+    D --> G["✅ System Ready"]
+    F --> G
+```
+
+```bash
+# Terminal 1 — Backend
+cd temple-finance/backend
+npm install
+npm run db:push      # prisma db push
+npm run seed         # node prisma/seed.js
+npm run dev          # node index.js → http://localhost:3001
+
+# Terminal 2 — Frontend
+cd temple-finance/frontend
+npm install
+npm run dev          # vite → http://localhost:5173
+```
+
+---
+
+## 9. Module Ownership Quick-Reference
+
+| Module | File | Key Special Endpoint | Side Effect |
+|---|---|---|---|
+| Transactions | [modules/transaction/routes.js](file:///home/jchang/Projects/AhChang/temple-finance/backend/modules/transaction/routes.js) | `GET /stats/summary` | None (source of truth) |
+| Payroll | [modules/payroll/routes.js](file:///home/jchang/Projects/AhChang/temple-finance/backend/modules/payroll/routes.js) | `POST /:id/pay` | Creates `Transaction` (expense) |
+| Quotes | [modules/quotes/routes.js](file:///home/jchang/Projects/AhChang/temple-finance/backend/modules/quotes/routes.js) | `POST /:id/convert` | Creates `Invoice` record |
+| Invoices | [modules/invoices/routes.js](file:///home/jchang/Projects/AhChang/temple-finance/backend/modules/invoices/routes.js) | `POST /:id/pay` | Creates `Transaction` (income) |
+| Reports | [modules/reports/routes.js](file:///home/jchang/Projects/AhChang/temple-finance/backend/modules/reports/routes.js) | `GET /dashboard` | Read-only aggregation |
+| DB Lib | `lib/prisma.js` | — | Singleton Prisma client |

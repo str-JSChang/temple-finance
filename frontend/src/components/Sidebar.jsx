@@ -7,13 +7,17 @@ import {
     FileText,
     BarChart3,
     Settings,
-    ShieldCheck
+    ShieldCheck,
+    Boxes,
+    BadgeDollarSign
 } from 'lucide-react';
 
 const Sidebar = () => {
     const navItems = [
         { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
         { name: 'Transactions', icon: Receipt, path: '/transactions' },
+        { name: 'Inventory', icon: Boxes, path: '/inventory' },
+        { name: 'Official Receipts', icon: BadgeDollarSign, path: '/receipts' },
         { name: 'Payroll', icon: Users, path: '/payroll' },
         { name: 'Quotes & Invoices', icon: FileText, path: '/quotes-invoices' },
         { name: 'Reports', icon: BarChart3, path: '/reports' },

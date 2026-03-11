@@ -82,3 +82,70 @@ model ProfitSnapshot {
   metadata     String?  // JSON for extra detail
   createdAt    DateTime @default(now())
 }
+
+// ─── INVENTORY (ITEM MANAGEMENT) ─────────────────────────────
+model ProductType {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  deleted   Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  code          String      @unique
+  productTypeId String
+  deleted       Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  productType   ProductType @relation(fields: [productTypeId], references: [id])
+  stockMoves    StockMovement[]
+}
+
+model SupplierInvoice {
+  id          String   @id @default(uuid())
+  supplierName String
+  invoiceNo   String?
+  date        DateTime @default(now())
+  items       String   // JSON string: [{productId, qty, unitCost}]
+  totalAmount Float
+  notes       String?
+  deleted     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StockMovement {
+  id               String   @id @default(uuid())
+  date             DateTime @default(now())
+  productId        String
+  qtyChange        Float
+  reference        String?  // e.g. "supplier-invoice:uuid"
+  deleted          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product          Product  @relation(fields: [productId], references: [id])
+}
+
+// ─── OFFICIAL RECEIPTS (PRINT TO PDF) ─────────────────────────
+model Receipt {
+  id            String   @id @default(uuid())
+  receiptNo     Int      @unique
+  date          DateTime @default(now())
+  receivedFrom  String
+  amount        Float
+  beingPaymentOf String?
+  activity      String?
+  isDonation    Boolean  @default(false)
+  bank          String?
+  chequeNo      String?
+  issuedBy      String?
+  transactionId String?
+  deleted       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

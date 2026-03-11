@@ -5,6 +5,11 @@ async function main() {
     console.log('🌱 Seeding Temple Finance database...');
 
     // Clear existing data
+    await prisma.stockMovement.deleteMany();
+    await prisma.supplierInvoice.deleteMany();
+    await prisma.product.deleteMany();
+    await prisma.productType.deleteMany();
+    await prisma.receipt.deleteMany();
     await prisma.profitSnapshot.deleteMany();
     await prisma.invoice.deleteMany();
     await prisma.quote.deleteMany();
@@ -87,6 +92,36 @@ async function main() {
         }),
     ]);
     console.log(`  ✅ Created ${transactions.length} transactions`);
+
+    // ─── INVENTORY (TYPES + PRODUCTS + SUPPLIER INVOICE) ───────
+    const typeIncense = await prisma.productType.create({ data: { name: '香 set' } });
+    const typeTiger = await prisma.productType.create({ data: { name: '虎爷 set' } });
+
+    const prod1 = await prisma.product.create({ data: { code: 'P-0001', productTypeId: typeIncense.id } });
+    const prod2 = await prisma.product.create({ data: { code: 'P-0002', productTypeId: typeTiger.id } });
+    console.log('  ✅ Created inventory product types/products');
+
+    const supplierInvoice = await prisma.supplierInvoice.create({
+        data: {
+            supplierName: 'Ah Chang Trading',
+            invoiceNo: 'SI-2026-0001',
+            date: new Date('2026-03-02'),
+            items: JSON.stringify([
+                { productId: prod1.id, qty: 50, unitCost: 2.5 },
+                { productId: prod2.id, qty: 20, unitCost: 8.0 },
+            ]),
+            totalAmount: 50 * 2.5 + 20 * 8.0,
+            notes: 'Demo supplier invoice (stock in).',
+        },
+    });
+
+    await prisma.stockMovement.createMany({
+        data: [
+            { date: supplierInvoice.date, productId: prod1.id, qtyChange: 50, reference: `supplier-invoice:${supplierInvoice.id}` },
+            { date: supplierInvoice.date, productId: prod2.id, qtyChange: 20, reference: `supplier-invoice:${supplierInvoice.id}` },
+        ],
+    });
+    console.log('  ✅ Created supplier invoice + stock movements');
 
     // ─── PAYROLL ──────────────────────────────────────────────
     const payroll = await Promise.all([
@@ -283,6 +318,35 @@ async function main() {
         }),
     ]);
     console.log(`  ✅ Created ${snapshots.length} profit snapshots`);
+
+    // ─── OFFICIAL RECEIPT (PRINT TEMPLATE DEMO) ────────────────
+    const receiptTx = await prisma.transaction.create({
+        data: {
+            date: new Date('2026-03-02'),
+            type: 'income',
+            category: 'Donations',
+            description: 'Receipt #11152 | From: Tan Ah Kow | Payment: Donation | Activity: Temple Fundraising',
+            amount: 200,
+            reference: 'receipt:11152',
+        },
+    });
+
+    await prisma.receipt.create({
+        data: {
+            receiptNo: 11152,
+            date: new Date('2026-03-02'),
+            receivedFrom: 'Tan Ah Kow 陈阿九',
+            amount: 200,
+            beingPaymentOf: 'Donation 乐捐',
+            activity: 'Temple Fundraising 庙务活动',
+            isDonation: true,
+            bank: 'CIMB',
+            chequeNo: 'CHQ-123456',
+            issuedBy: 'Admin',
+            transactionId: receiptTx.id,
+        },
+    });
+    console.log('  ✅ Created sample official receipt');
 
     console.log('\n🎉 Seed completed successfully!');
 }
